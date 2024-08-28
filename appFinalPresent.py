@@ -1,7 +1,7 @@
 import sys
 import os
 
-# Add the .venv\Scripts\ directory to the Python path
+# Add the .venv\Scripts\ directory to the Python path (if necessary)
 venv_scripts_dir = os.path.join(os.path.dirname(__file__), ".venv", "Scripts")
 sys.path.append(venv_scripts_dir)
 
@@ -10,17 +10,38 @@ import lyricsgenius
 from PIL import Image
 from io import BytesIO
 import requests
-from utils import preprocess_lyrics
+from langdetect import detect, LangDetectException
+from langdetect.lang_detect_exception import ErrorCode
+
+# Languages to detect
+LANGUAGES = {'id': 'Indonesian', 'fr': 'French', 'de': 'German', 'nl': 'Dutch', 'en': 'English'}
+
+def preprocess_lyrics(lyrics):
+    verses = lyrics.split('\n\n')  # Assuming verses are separated by double newlines
+
+    results = []
+    for verse in verses:
+        # Remove "(ContributorsTranslations)" if present
+        verse = verse.replace("(ContributorsTranslations)", "")
+        
+        if verse.strip():
+            try:
+                detected_lang = detect(verse)
+                if detected_lang in LANGUAGES:
+                    predicted_language = LANGUAGES[detected_lang]
+                    results.append((verse, predicted_language))
+                else:
+                    results.append((verse, "Unknown"))
+            except LangDetectException as e:
+                results.append((verse, "Unknown"))
+
+    return results
 
 # Set up the Genius API client
-genius = lyricsgenius.Genius(
-    "UIm6tPDw7sWQSyXJffXV5nd6h42kqdmcHsh3zyVOMU_YPAo8ofFrk5QZekmtQFH1"
-)
+genius = lyricsgenius.Genius("UIm6tPDw7sWQSyXJffXV5nd6h42kqdmcHsh3zyVOMU_YPAo8ofFrk5QZekmtQFH1")
 
 # Streamlit app configuration
-st.set_page_config(
-    page_title="LANGUAGE CLASSIFICATION ", page_icon="🎤", layout="wide"
-)
+st.set_page_config(page_title="LANGUAGE CLASSIFICATION", page_icon="🎤", layout="wide")
 
 # Header section
 st.title("🎤 LANGUAGE CLASSIFICATION IN MUSIC LYRICS USING NAÏVE BAYES ALGORITHM")
@@ -66,9 +87,7 @@ with st.container():
                                 st.subheader(f"Verse in {predicted_language}")
                                 st.text_area("Verse", value=verse, height=150, key=f'verse_{i}')
                     else:
-                        st.warning(
-                            f"Album cover not found for '{song.title}' by '{song.artist}'"
-                        )
+                        st.warning(f"Album cover not found for '{song.title}' by '{song.artist}'")
                 else:
                     st.error(f"Lyrics for '{song_title}' by '{artist_name}' not found.")
             except Exception as e:
@@ -87,8 +106,6 @@ with st.container():
     if st.button("Classify Text"):
         if user_text.strip():
             try:
-                # Detect the language of the user text using langdetect
-                user_text_processed = [user_text]  # Wrap the text in a list to process as a single instance
                 verse_results = preprocess_lyrics(user_text)
                 if verse_results:
                     verse, predicted_language = verse_results[0]
